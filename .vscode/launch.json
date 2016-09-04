@@ -12,7 +12,8 @@
             "program": "${workspaceRoot}",
             "env": {},
             "args": [],
-            "showLog": true
+            "showLog": true,
+            "preLaunchTask": "goBuild"
         }
     ]
 }
