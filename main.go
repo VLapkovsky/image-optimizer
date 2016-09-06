@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"strconv"
 )
 
 func check(e error) {
@@ -12,18 +14,29 @@ func check(e error) {
 }
 
 func handler(writer http.ResponseWriter, request *http.Request) {
-	// image, error := ioutil.ReadFile("/Users/vitaly.lapkovsky/Documents/test.png")
-	// check(error)
 	query := request.URL.Query()
-	imageUrl := query.Get("imageUrl")
+	inputImageurl := query.Get("imageUrl")
 
-	if len(imageUrl) == 0 {
+	if len(inputImageurl) == 0 {
 		writer.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(writer, "Bad url request: %s", request.URL)
 		return
 	}
 
-	fmt.Fprint(writer, imageUrl)
+	responce, error := http.Get(inputImageurl)
+	check(error)
+	defer responce.Body.Close()
+
+	imageBody, error := ioutil.ReadAll(responce.Body)
+	check(error)
+
+	contentLenght, _ := strconv.ParseUint(request.URL.Query().Get("Content-Lenght"), 10, 64)
+	writer.Header().Set("Content-Lenght", strconv.FormatUint(contentLenght, 10))
+	writer.WriteHeader(http.StatusOK)
+
+	writer.Write(imageBody)
+
+	// fmt.Fprint(writer, imageUrl)
 
 	// writer.Header().Set("Content-Lenght", strconv.Itoa(len(image)))
 	// writer.WriteHeader(http.StatusOK)
