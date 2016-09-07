@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
+	"strings"
 )
 
 func check(e error) {
@@ -30,8 +30,11 @@ func handler(writer http.ResponseWriter, request *http.Request) {
 	imageBody, error := ioutil.ReadAll(responce.Body)
 	check(error)
 
-	contentLenght, _ := strconv.ParseUint(request.URL.Query().Get("Content-Lenght"), 10, 64)
-	writer.Header().Set("Content-Lenght", strconv.FormatUint(contentLenght, 10))
+	for key, value := range responce.Header {
+		writer.Header().Set(key, strings.Join(value, ""))
+	}
+
+	// writer.Header().Set("Content-Length", responce.Header.Get("Content-Length"))
 	writer.WriteHeader(http.StatusOK)
 
 	writer.Write(imageBody)
