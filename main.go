@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func check(e error) {
@@ -23,7 +24,9 @@ func handler(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	responce, error := http.Get(inputImageurl)
+	var webClient = &http.Client{Timeout: time.Second * 10}
+
+	responce, error := webClient.Get(inputImageurl)
 	check(error)
 	defer responce.Body.Close()
 
@@ -51,3 +54,8 @@ func main() {
 	http.HandleFunc("/resize", handler)
 	http.ListenAndServe(":8080", nil)
 }
+
+// https://www.socketloop.com/tutorials/golang-resize-image
+// https://godoc.org/?q=resize+image
+// https://github.com/h2non/imaginary
+// https://github.com/willnorris/imageproxy
