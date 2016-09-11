@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"image"
 	"net/http"
-	"strings"
+	"runtime"
+	"strconv"
 	"time"
+
+	"github.com/disintegration/imaging"
 )
 
 func check(e error) {
@@ -14,43 +17,103 @@ func check(e error) {
 	}
 }
 
+const defaultImageWidth int = 400
+const defaultImageHeight int = 400
+
+func sendBadRequest(writer http.ResponseWriter, request *http.Request) {
+	writer.WriteHeader(http.StatusBadRequest)
+	fmt.Fprintf(writer, "Bad url request: %s", request.URL)
+}
+
+func getImageFormat(response *http.Response) (imageFormat imaging.Format) {
+	switch response.Header.Get("Content-Type") {
+	case "image/jpeg", "image/jpg":
+		imageFormat = imaging.JPEG
+
+	case "image/gif":
+		imageFormat = imaging.GIF
+
+	case "image/png":
+		imageFormat = imaging.PNG
+
+	case "image/bmp":
+		imageFormat = imaging.BMP
+
+	case "image/tiff":
+		imageFormat = imaging.TIFF
+
+	default:
+		imageFormat = imaging.JPEG
+	}
+
+	return imageFormat
+}
+
+func getImageSize(originalSize image.Point, inputWidth, inputHeight string) (imageWidth, imageHeight int, err error) {
+	if len(inputWidth) == 0 &&
+		len(inputHeight) == 0 {
+		if originalSize.X > originalSize.Y {
+			imageWidth = defaultImageWidth
+			imageHeight = 0
+		} else {
+			imageWidth = 0
+			imageHeight = defaultImageHeight
+		}
+
+	} else if len(inputWidth) > 0 {
+		imageWidth, err = strconv.Atoi(inputWidth)
+	} else if len(inputHeight) > 0 {
+		imageHeight, err = strconv.Atoi(inputHeight)
+	}
+
+	return imageWidth, imageHeight, err
+}
+
 func handler(writer http.ResponseWriter, request *http.Request) {
 	query := request.URL.Query()
 	inputImageurl := query.Get("imageUrl")
+	inputImageWidth := query.Get("imageWidth")
+	inputImageHeight := query.Get("imageHeight")
 
 	if len(inputImageurl) == 0 {
-		writer.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(writer, "Bad url request: %s", request.URL)
+		sendBadRequest(writer, request)
 		return
 	}
 
-	var webClient = &http.Client{Timeout: time.Second * 10}
+	var webClient = &http.Client{Timeout: time.Second * 30}
 
-	responce, error := webClient.Get(inputImageurl)
+	response, error := webClient.Get(inputImageurl)
 	check(error)
-	defer responce.Body.Close()
+	defer response.Body.Close()
 
-	imageBody, error := ioutil.ReadAll(responce.Body)
+	// image, error := imaging.Decode(response.Body)
+	image, _, error := image.Decode(response.Body)
 	check(error)
 
-	for key, value := range responce.Header {
-		writer.Header().Set(key, strings.Join(value, ""))
+	imageFormat := getImageFormat(response)
+
+	originImageSize := image.Bounds().Max
+
+	if originImageSize.X <= defaultImageWidth &&
+		originImageSize.Y <= defaultImageHeight {
+		writer.WriteHeader(http.StatusOK)
+		imaging.Encode(writer, image, imageFormat)
+		return
 	}
 
-	// writer.Header().Set("Content-Length", responce.Header.Get("Content-Length"))
+	imageWidth, imageHeight, error := getImageSize(originImageSize, inputImageWidth, inputImageHeight)
+	check(error)
+
+	destImage := imaging.Resize(image, imageWidth, imageHeight, imaging.Box)
+
 	writer.WriteHeader(http.StatusOK)
-
-	writer.Write(imageBody)
-
-	// fmt.Fprint(writer, imageUrl)
-
-	// writer.Header().Set("Content-Lenght", strconv.Itoa(len(image)))
-	// writer.WriteHeader(http.StatusOK)
-	// writer.Write(image)
-	// fmt.Fprintf(writer, "Hi there, I love %s!", request.URL.Path[1:])
+	// fmt.Fprintln(writer, formatStr)
+	imaging.Encode(writer, destImage, imageFormat)
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	http.HandleFunc("/resize", handler)
 	http.ListenAndServe(":8080", nil)
 }
